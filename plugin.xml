@@ -12,6 +12,7 @@
 	<platform name="android">		
 
 		<framework src="com.squareup.duktape:duktape-android:0.9.5" />
+		<framework src="commons-io:commons-io:2.4" />
 			
 		<config-file target="res/xml/config.xml" parent="/*">
 			<feature name="Duktape">
