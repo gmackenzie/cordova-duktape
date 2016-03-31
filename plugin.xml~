@@ -20,9 +20,7 @@
 			</feature>
 		</config-file>		
 		
-		<source-file src="src/android/com/commontime/cordova/plugins/duktape/DuktapePlugin.java" target-dir="src/com/commontime/cordova/plugins/duktape/"/>
-		<source-file src="src/android/com/commontime/cordova/plugins/duktape/DuktapeEngine.java" target-dir="src/com/commontime/cordova/plugins/duktape/"/>		
-		<source-file src="src/android/com/commontime/cordova/plugins/duktape/DuktapeCallback.java" target-dir="src/com/commontime/cordova/plugins/duktape/"/>				
+		<source-file src="src/android/com/commontime/cordova/plugins/duktape/Duktape.java" target-dir="src/com/commontime/cordova/plugins/duktape/"/>		
 		
 	</platform>
   
