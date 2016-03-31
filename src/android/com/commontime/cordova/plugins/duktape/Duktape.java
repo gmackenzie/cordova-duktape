@@ -1,0 +1,227 @@
+package com.commontime.cordova.plugins.provisioning;
+
+import android.content.SharedPreferences;
+import android.net.Uri;
+import android.util.Log;
+import android.webkit.MimeTypeMap;
+
+import org.apache.cordova.CallbackContext;
+import org.apache.cordova.CordovaPlugin;
+import org.apache.cordova.CordovaResourceApi;
+import org.apache.cordova.PluginResult;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+
+public class Duktape extends CordovaPlugin {
+
+	private static final String TAG = "CTProvisioning";
+
+	static final String SETTINGS_NAME = "com.commontime.cordova.plugins.provisioning.xml";
+	static final String DEFAULT_VERSION = "0.0.0";
+	static final String PREFS_CURRENT_VERSION = "currentVersion";
+	static final String UTF_8 = "UTF_8";
+	static final String APP_VERSIONS_JSON = "appVersions.json";
+
+	private static final String ACTION_START_CHECKING = "startChecking";
+	private static final String ACTION_UPDATE_VERSIONS = "updateVersions";
+	private static final String ACTION_DOWNLOAD_VERSION = "downloadVersion";
+	private static final String ACTION_INSTALL_VERSION = "installVersion";
+	private static final String ACTION_GET_LATEST_VERSION_NUMBER = "getLatestVersionNumber";
+	private static final String ACTION_GET_VERSIONS_INFO = "getVersionsInfo";
+	private static final String ACTION_GET_INSTALLED_VERSION = "getInstalledVersion";
+	private static final String ACTION_RESTART_APPLICATION = "restartApplication";
+	private static final String ACTION_LISTEN_FOR_UPDATES = "listenForUpdates";
+	private static final String ACTION_LISTEN_FOR_PROGRESS = "listenForProgress";
+
+	static final String PREFS_START_PAGE = "provisioning_startpage";
+	static final String PREFS_DEFAULT_START_PAGE = "index.html";
+	static final String PREFS_HOST = "provisioning_host";
+	static final String PREFS_DEFAULT_HOST = "10.10.10.10";
+	static final String PREFS_PORT = "provisioning_port";
+	static final String PREFS_DEFAULT_PORT = "616";
+	static final String PREFS_SCHEME = "provisioning_scheme";
+	static final String PREFS_DEFAULT_SCHEME = "http";
+	static final String PREFS_MANIFEST_URL = "provisioning_manifest";
+	static final String PREFS_DEFAULT_MANIFEST_URL = "http://graham2:3001/versionInfo";
+	static final String PREFS_POLL_TIME = "provisioning_poll";
+	static final int PREFS_DEFAULT_POLL_TIME = 30;
+	public static final String PREFS_MANUAL = "provisioning_manual";
+	public static final boolean PREFS_DEFAULT_MANUAL = false;
+	public static final String PREFS_WIFIONLY = "provisioning_wifionly";
+	public static final boolean PREFS_DEFAULT_WIFIONLY = false;
+	public static final String PREFS_CUSTOM_HEADERS = "provisioning_custom_headers";
+	public static final String PREFS_DEFAULT_CUSTOM_HEADERS = "{}";
+	public static final String PREFS_CHECKSUM = "provisioning_checksum";
+	public static final String PREFS_DEFAULT_CHECKSUM = "none";
+
+	static final String PREFS_ALREADY_READ = "prefsalreadyread";
+
+	private static final String JSON_VERSION = "version";
+	private static final String JSON_LATEST_VERSION = "latestVersion";
+	static final String JSON_VERSIONS = "versions";
+	static final String FILE_VERSIONS = "versions";
+
+	@Override
+	protected void pluginInitialize() {
+		Provisioner.get().init(cordova.getActivity(), preferences);
+
+		Provisioner.get().clearListeners();
+	}
+
+	@Override
+	public void onDestroy() {
+		Provisioner.get().onDestroy();
+	}
+
+	public boolean execute(String action, JSONArray args, final CallbackContext callbackContext) throws JSONException {
+		if (action.equals(ACTION_START_CHECKING)) {
+			Provisioner.get().startCheckingForUpdates();
+			return true;
+		}
+		if (action.equals(ACTION_UPDATE_VERSIONS)) {
+			Provisioner.get().updateVersions(new TaskObserver() {
+				@Override
+				public void error(int statusCode, String error) {
+					callbackContext.error(error);
+				}
+
+				@Override
+				public void success() {
+					JSONObject jso = new JSONObject();
+					try {
+						jso.put(JSON_LATEST_VERSION, Provisioner.get().getLatestVersionNumber());
+					} catch (JSONException e) {
+						e.printStackTrace();
+						callbackContext.error(e.getMessage());
+					}
+					callbackContext.success(jso);
+				}
+			});
+			return true;
+		}
+		if (action.equals(ACTION_DOWNLOAD_VERSION)) {
+			JSONObject jso = args.getJSONObject(0);
+			String version = jso.getString(JSON_VERSION);
+			Provisioner.get().startDownload(version, new TaskObserver() {
+				@Override
+				public void success() {
+					callbackContext.success();
+				}
+
+				@Override
+				public void error(int statusCode, String error) {
+					callbackContext.error(error);
+				}
+			});
+			return true;
+		}
+		if (action.equals(ACTION_INSTALL_VERSION)) {
+			JSONObject jso = args.getJSONObject(0);
+			String version = jso.getString(JSON_VERSION);
+			Provisioner.get().doInstall(version, new TaskObserver() {
+				@Override
+				public void success() {
+					callbackContext.success();
+				}
+
+				@Override
+				public void error(int statusCode, String error) {
+					callbackContext.error(error);
+				}
+			});
+			return true;
+		}
+		if (action.equals(ACTION_RESTART_APPLICATION)) {
+			cordova.getActivity().runOnUiThread(new Runnable() {
+				@Override
+				public void run() {
+					webView.loadUrl(Provisioner.get().getAppUri());
+					callbackContext.success();
+				}
+			});
+
+			return true;
+		}
+		if (action.equals(ACTION_GET_LATEST_VERSION_NUMBER)) {
+			String ver = Provisioner.get().getLatestVersionNumber();
+			callbackContext.success(ver);
+			return true;
+		}
+		if (action.equals(ACTION_GET_VERSIONS_INFO)) {
+			JSONObject jso = Provisioner.get().getVersionsJSON();
+			callbackContext.success(jso);
+			return true;
+		}
+		if (action.equals(ACTION_GET_INSTALLED_VERSION)) {
+			SharedPreferences settings = cordova.getActivity().getSharedPreferences(SETTINGS_NAME, 0);
+			String currentVersion = settings.getString(PREFS_CURRENT_VERSION, DEFAULT_VERSION);
+			callbackContext.success(currentVersion);
+			return true;
+		}
+		if (action.equals(ACTION_LISTEN_FOR_UPDATES)) {
+			Provisioner.get().addListener(callbackContext.getCallbackId(), callbackContext);
+			PluginResult result = new PluginResult(PluginResult.Status.NO_RESULT);
+			result.setKeepCallback(true);
+			callbackContext.sendPluginResult(result);
+			return true;
+		}
+		if (action.equals(ACTION_LISTEN_FOR_PROGRESS)) {
+			Provisioner.get().addProgressListener(callbackContext.getCallbackId(), callbackContext);
+			PluginResult result = new PluginResult(PluginResult.Status.NO_RESULT);
+			result.setKeepCallback(true);
+			callbackContext.sendPluginResult(result);
+			return true;
+		}
+
+		return false;
+	}
+
+	public Uri remapUri(Uri uri) {
+		// Exceptions to appcaching go here
+		if( !uri.getHost().toLowerCase().equals(Uri.parse(Provisioner.get().getAppUri()).getHost().toLowerCase()) ) {
+			return uri;
+		}
+
+		// Force appcache to handle here:
+		return toPluginUri(uri);
+	}
+
+	public CordovaResourceApi.OpenForReadResult handleOpenForRead(Uri puri) throws IOException {
+
+		Uri origUri = fromPluginUri(puri);
+		URI uri = URI.create(origUri.toString());
+
+		String url = origUri.toString();
+		int mark = url.indexOf("?");
+		if (mark > 0) {
+			url = url.substring(0, mark);
+			uri = URI.create(url);
+		}
+
+		Log.d(TAG, "Requested: " + uri);
+
+		try {
+
+			InputStream is = Provisioner.get().getStreamForPath(uri);
+			if (is != null) {
+				String type = "";
+				String extension = MimeTypeMap.getFileExtensionFromUrl(origUri.toString());
+				if (extension != null) {
+					MimeTypeMap mime = MimeTypeMap.getSingleton();
+					type = mime.getMimeTypeFromExtension(extension);
+				}
+				return new CordovaResourceApi.OpenForReadResult(origUri, is, type, 0, null);
+			}
+		} catch(Exception e) {
+			throw new FileNotFoundException(e.getMessage());
+		}
+
+		throw new FileNotFoundException("Plugin can't handle uri: " + uri);
+	}
+}
